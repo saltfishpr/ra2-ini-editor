@@ -1,0 +1,5 @@
+{
+    "gopls": {
+        "formatting.local": "ra2-ini-editor"
+    }
+}

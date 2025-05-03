@@ -1,0 +1,24 @@
+.ant-collapse-content-box {
+  padding: 0;
+}
+
+.unit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.unit-item {
+  padding: 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.unit-item:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+.unit-item.selected {
+  background-color: #e6f7ff;
+}
