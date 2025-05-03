@@ -1,6 +1,7 @@
 package ra2
 
 import (
+	"os"
 	"testing"
 
 	"github.com/samber/lo"
@@ -9,7 +10,12 @@ import (
 )
 
 func TestRules(t *testing.T) {
-	rules, err := NewRules("../../data/rulesmd.ini")
+	rulesFile, err := os.Open("../../data/rulesmd.ini")
+	if err != nil {
+		t.Fatalf("failed to open rules file: %v", err)
+	}
+	defer rulesFile.Close()
+	rules, err := NewRules(rulesFile)
 	if err != nil {
 		t.Fatalf("failed to parse file: %v", err)
 	}

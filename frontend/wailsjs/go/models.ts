@@ -1,9 +1,11 @@
 export namespace main {
 	
 	export class Property {
+	    ukey: string;
 	    key: string;
 	    value: string;
 	    comment: string;
+	    desc?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Property(source);
@@ -11,15 +13,18 @@ export namespace main {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ukey = source["ukey"];
 	        this.key = source["key"];
 	        this.value = source["value"];
 	        this.comment = source["comment"];
+	        this.desc = source["desc"];
 	    }
 	}
 	export class Unit {
 	    type: string;
 	    id: number;
 	    name: string;
+	    ui_name: string;
 	    properties: Property[];
 	
 	    static createFrom(source: any = {}) {
@@ -31,6 +36,7 @@ export namespace main {
 	        this.type = source["type"];
 	        this.id = source["id"];
 	        this.name = source["name"];
+	        this.ui_name = source["ui_name"];
 	        this.properties = this.convertValues(source["properties"], Property);
 	    }
 	

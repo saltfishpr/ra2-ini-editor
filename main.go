@@ -8,6 +8,11 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 )
 
+const (
+	MinWindowWidth  = 1200
+	MinWindowHeight = 900
+)
+
 //go:embed all:frontend/dist
 var assets embed.FS
 
@@ -17,13 +22,15 @@ func main() {
 
 	// Create application with options
 	err := wails.Run(&options.App{
-		Title:  "ra2-ini-editor",
-		Width:  1024,
-		Height: 768,
+		Title:     "ra2-ini-editor",
+		Width:     MinWindowWidth,
+		Height:    MinWindowHeight,
+		MinWidth:  MinWindowWidth,
+		MinHeight: MinWindowHeight,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
-		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
+		BackgroundColour: options.NewRGBA(255, 255, 255, 0),
 		OnStartup:        app.startup,
 		Bind: []interface{}{
 			app,

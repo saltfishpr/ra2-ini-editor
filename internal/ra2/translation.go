@@ -1,6 +1,8 @@
 package ra2
 
 import (
+	"io"
+
 	"github.com/charmbracelet/log"
 	"gopkg.in/ini.v1"
 )
@@ -11,10 +13,11 @@ type Translation struct {
 	sec  *ini.Section
 }
 
-func LoadTranslation(filename string, lang string) (*Translation, error) {
+func LoadTranslation(r io.ReadCloser, lang string) (*Translation, error) {
 	cfg, err := ini.LoadSources(ini.LoadOptions{
 		KeyValueDelimiters: "=",
-	}, filename)
+		InsensitiveKeys:    true,
+	}, r)
 	if err != nil {
 		return nil, err
 	}

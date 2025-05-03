@@ -6,6 +6,13 @@ import (
 
 type I18NString map[string]string
 
+func (i I18NString) Get(lang string) string {
+	if val, ok := i[lang]; ok {
+		return val
+	}
+	return ""
+}
+
 type Property struct {
 	Key     string `json:"key"`     // 属性键
 	Value   string `json:"value"`   // 属性值

@@ -38,10 +38,13 @@ func (s *BaseSetting) Get(key string) string {
 	return ""
 }
 
-func (s *BaseSetting) Set(key, value string) error {
-	_, err := s.sec.NewKey(key, value)
+func (s *BaseSetting) Set(key, value string, comment ...string) error {
+	k, err := s.sec.NewKey(key, value)
 	if err != nil {
 		return errors.WithStack(err)
+	}
+	if len(comment) > 0 {
+		k.Comment = comment[0]
 	}
 	return nil
 }
@@ -68,11 +71,34 @@ type Unit struct {
 type UnitType string
 
 const (
+	UnitTypeUnknown  UnitType = ""
 	UnitTypeInfantry UnitType = "infantry"
 	UnitTypeVehicle  UnitType = "vehicle"
 	UnitTypeAircraft UnitType = "aircraft"
 	UnitTypeBuilding UnitType = "building"
 )
+
+var UnitTypes = []UnitType{
+	UnitTypeInfantry,
+	UnitTypeVehicle,
+	UnitTypeAircraft,
+	UnitTypeBuilding,
+}
+
+func NewUnitType(name string) UnitType {
+	switch name {
+	case "infantry":
+		return UnitTypeInfantry
+	case "vehicle":
+		return UnitTypeVehicle
+	case "aircraft":
+		return UnitTypeAircraft
+	case "building":
+		return UnitTypeBuilding
+	default:
+		return UnitTypeUnknown
+	}
+}
 
 func (ut UnitType) Section() SectionName {
 	switch ut {
@@ -93,21 +119,22 @@ type Rules struct {
 	f *ini.File
 }
 
-func NewRules(filename string) (*Rules, error) {
-	if filename == "" {
-		return &Rules{
-			f: ini.Empty(),
-		}, nil
-	}
+func NewRules(r io.ReadCloser) (*Rules, error) {
 	f, err := ini.LoadSources(ini.LoadOptions{
 		KeyValueDelimiters: "=",
-	}, filename)
+	}, r)
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
 	return &Rules{
 		f: f,
 	}, nil
+}
+
+func NewEmptyRules() *Rules {
+	return &Rules{
+		f: ini.Empty(),
+	}
 }
 
 func (r *Rules) Save(w io.Writer) error {
@@ -142,46 +169,22 @@ func (r *Rules) Merge(others ...*Rules) (*Rules, error) {
 
 func (r *Rules) Units() []*Unit {
 	var units []*Unit
-	for _, key := range r.f.Section(string(SectionNameInfantry)).Keys() {
+	units = append(units, r.UnitsByType(UnitTypeInfantry)...)
+	units = append(units, r.UnitsByType(UnitTypeVehicle)...)
+	units = append(units, r.UnitsByType(UnitTypeAircraft)...)
+	units = append(units, r.UnitsByType(UnitTypeBuilding)...)
+	return units
+}
+
+func (r *Rules) UnitsByType(unitType UnitType) []*Unit {
+	var units []*Unit
+	for _, key := range r.f.Section(string(unitType.Section())).Keys() {
 		id := cast.ToInt(key.Name())
 		name := key.Value()
 		units = append(units, &Unit{
 			BaseSetting: BaseSetting{sec: r.f.Section(name)},
 
-			Type: UnitTypeInfantry,
-			ID:   id,
-			Name: name,
-		})
-	}
-	for _, key := range r.f.Section(string(SectionNameVehicle)).Keys() {
-		id := cast.ToInt(key.Name())
-		name := key.Value()
-		units = append(units, &Unit{
-			BaseSetting: BaseSetting{sec: r.f.Section(name)},
-
-			Type: UnitTypeVehicle,
-			ID:   id,
-			Name: name,
-		})
-	}
-	for _, key := range r.f.Section(string(SectionNameAircraft)).Keys() {
-		id := cast.ToInt(key.Name())
-		name := key.Value()
-		units = append(units, &Unit{
-			BaseSetting: BaseSetting{sec: r.f.Section(name)},
-
-			Type: UnitTypeAircraft,
-			ID:   id,
-			Name: name,
-		})
-	}
-	for _, key := range r.f.Section(string(SectionNameBuilding)).Keys() {
-		id := cast.ToInt(key.Name())
-		name := key.Value()
-		units = append(units, &Unit{
-			BaseSetting: BaseSetting{sec: r.f.Section(name)},
-
-			Type: UnitTypeBuilding,
+			Type: unitType,
 			ID:   id,
 			Name: name,
 		})
@@ -198,31 +201,37 @@ func (r *Rules) GetUnit(unitType UnitType, unitID int) *Unit {
 	return nil
 }
 
-func (r *Rules) AddUnit(unitType UnitType, unitID int, unitName string, properties []Property) error {
+func (r *Rules) AddUnit(unitType UnitType, unitID int, unitName string, properties []Property) (*Unit, error) {
 	if r.f.HasSection(unitName) {
-		return errors.New("unit name already used")
+		return nil, errors.New("unit name already used")
 	}
 	if r.GetUnit(unitType, unitID) != nil {
-		return errors.New("unit ID already exists")
+		return nil, errors.New("unit ID already exists")
 	}
 
 	defSec := r.f.Section(string(unitType.Section()))
 	_, err := defSec.NewKey(cast.ToString(unitID), unitName)
 	if err != nil {
-		return errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
 
 	sec, err := r.f.NewSection(unitName)
 	if err != nil {
-		return errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
 	for _, prop := range properties {
 		_, err := sec.NewKey(prop.Key, prop.Value)
 		if err != nil {
-			return errors.WithStack(err)
+			return nil, errors.WithStack(err)
 		}
 	}
-	return nil
+	return &Unit{
+		BaseSetting: BaseSetting{sec: sec},
+
+		Type: unitType,
+		ID:   unitID,
+		Name: unitName,
+	}, nil
 }
 
 func (r *Rules) DelUnit(unitType UnitType, unitID int) error {

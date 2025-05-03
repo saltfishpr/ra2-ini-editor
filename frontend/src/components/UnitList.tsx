@@ -38,7 +38,7 @@ const UnitList = ({ units, onSelectUnit, selectedUnit }: UnitListProps) => {
             }`}
             onClick={() => onSelectUnit(unit)}
           >
-            {unit.name}
+            {unit.ui_name || unit.name}
           </div>
         ))}
       </div>

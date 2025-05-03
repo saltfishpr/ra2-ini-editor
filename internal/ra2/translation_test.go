@@ -1,35 +1,22 @@
 package ra2
 
 import (
-	"bufio"
-	"fmt"
 	"os"
-	"strings"
 	"testing"
 )
 
 func TestTranslation(t *testing.T) {
-	translation, err := LoadTranslation("testdata/ra2md.ini", "zh-TW")
+	translationFile, err := os.Open("../../data/ra2md.ini")
+	if err != nil {
+		t.Fatalf("failed to open translation file: %v", err)
+	}
+	defer translationFile.Close()
+	translation, err := LoadTranslation(translationFile, "zh-TW")
 	if err != nil {
 		t.Fatalf("failed to load translation: %v", err)
 	}
-	_ = translation
 
-	// 打开文件
-	file, err := os.Open("testdata/ra2md.ini")
-	if err != nil {
-		t.Fatalf("打开文件失败: %v", err)
-	}
-	defer file.Close()
-
-	// 创建一个按行读取的 Scanner
-	scanner := bufio.NewScanner(file)
-
-	// 按行读取
-	for scanner.Scan() {
-		line := scanner.Text()
-		pair := strings.SplitN(line, "=", 2)
-		key := strings.TrimSpace(pair[0])
-		fmt.Println(key)
+	for _, key := range translation.sec.Keys() {
+		t.Logf("Key: %s, Value: %s", key.Name(), key.Value())
 	}
 }

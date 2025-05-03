@@ -4,6 +4,7 @@ go 1.23
 
 require (
 	github.com/charmbracelet/log v0.4.1
+	github.com/oklog/ulid/v2 v2.1.0
 	github.com/pkg/errors v0.9.1
 	github.com/samber/lo v1.49.1
 	github.com/spf13/cast v1.8.0

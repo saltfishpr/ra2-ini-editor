@@ -22,6 +22,7 @@
 .app-sider {
   background: #fff;
   padding: 8px;
+  width: 200px;
   overflow: auto;
   height: 100%;
 }

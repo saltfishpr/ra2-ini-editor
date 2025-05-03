@@ -7,6 +7,7 @@ import (
 	"os"
 	"runtime/debug"
 
+	"github.com/oklog/ulid/v2"
 	"github.com/samber/lo"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
@@ -29,15 +30,32 @@ type App struct {
 
 // NewApp creates a new App application struct
 func NewApp() *App {
-	schema, err := ra2.LoadSchema("data/schema.json")
+	schemaFile, err := dataFs.Open("data/schema.json")
 	if err != nil {
 		panic(err)
 	}
-	origin, err := ra2.NewRules("data/rulesmd.ini")
+	defer schemaFile.Close()
+	schema, err := ra2.LoadSchema(schemaFile)
 	if err != nil {
 		panic(err)
 	}
-	translation, err := ra2.LoadTranslation("data/ra2md.ini", "zh-TW")
+
+	originFile, err := dataFs.Open("data/rulesmd.ini")
+	if err != nil {
+		panic(err)
+	}
+	defer originFile.Close()
+	origin, err := ra2.NewRules(originFile)
+	if err != nil {
+		panic(err)
+	}
+
+	translationFile, err := dataFs.Open("data/ra2md.ini")
+	if err != nil {
+		panic(err)
+	}
+	defer translationFile.Close()
+	translation, err := ra2.LoadTranslation(translationFile, "zh-TW")
 	if err != nil {
 		panic(err)
 	}
@@ -46,7 +64,7 @@ func NewApp() *App {
 		origin:      origin,
 		translation: translation,
 
-		rules: lo.Must(ra2.NewRules("")),
+		rules: ra2.NewEmptyRules(),
 	}
 }
 
@@ -93,7 +111,12 @@ func (a *App) Open() error {
 		return NewAppError(400, "no file selected")
 	}
 
-	rules, err := ra2.NewRules(filename)
+	rulesFile, err := os.Open(filename)
+	if err != nil {
+		return NewAppErrorf(500, "open file error: %v", err)
+	}
+	defer rulesFile.Close()
+	rules, err := ra2.NewRules(rulesFile)
 	if err != nil {
 		return NewAppErrorf(500, "load rules error: %v", err)
 	}
@@ -130,6 +153,14 @@ func (a *App) Save() error {
 	return nil
 }
 
+func (a *App) UserRules() (string, error) {
+	bts, err := a.rules.Content()
+	if err != nil {
+		return "", NewAppErrorf(500, "get rules content error: %v", err)
+	}
+	return string(bts), nil
+}
+
 func (a *App) getRules() *ra2.Rules {
 	r := a.origin
 	if a.rules != nil {
@@ -139,24 +170,20 @@ func (a *App) getRules() *ra2.Rules {
 }
 
 type Property struct {
+	UKey    string `json:"ukey"`
 	Key     string `json:"key"`
 	Value   string `json:"value"`
 	Comment string `json:"comment"`
+
+	Desc *string `json:"desc"`
 }
 
 type Unit struct {
 	Type       string     `json:"type"`
 	ID         int        `json:"id"`
 	Name       string     `json:"name"`
+	UIName     string     `json:"ui_name"`
 	Properties []Property `json:"properties"`
-}
-
-func (a *App) getUnitName(unit *ra2.Unit) string {
-	name := a.translation.Get(unit.UIName())
-	if name == "" {
-		name = unit.Name
-	}
-	return name
 }
 
 func (a *App) ListAllUnits() ([]*Unit, error) {
@@ -172,9 +199,10 @@ func (a *App) ListAllUnits() ([]*Unit, error) {
 	units := make([]*Unit, 0)
 	for _, unit := range r.Units() {
 		units = append(units, &Unit{
-			Type: string(unit.Type),
-			ID:   unit.ID,
-			Name: a.getUnitName(unit),
+			Type:   string(unit.Type),
+			ID:     unit.ID,
+			Name:   unit.Name,
+			UIName: a.translation.Get(unit.UIName()),
 		})
 	}
 
@@ -184,24 +212,131 @@ func (a *App) ListAllUnits() ([]*Unit, error) {
 func (a *App) GetUnit(unitType string, id int) (*Unit, error) {
 	r := a.getRules()
 
-	unit := r.GetUnit(ra2.UnitType(unitType), id)
+	unit := r.GetUnit(ra2.NewUnitType(unitType), id)
 	if unit == nil {
 		return nil, NewAppErrorf(404, "unit not found")
 	}
 
+	availableProps := a.schema.ListAvailableUnitProperties(unit.Type)
 	props := make([]Property, 0)
 	for _, prop := range unit.Properties() {
+		prop := Property{
+			UKey:    ulid.Make().String(),
+			Key:     prop.Key,
+			Value:   prop.Value,
+			Comment: prop.Comment,
+		}
+		schemaProp, ok := lo.Find(availableProps, func(p ra2.Property) bool {
+			return p.Key == prop.Key
+		})
+		if ok {
+			prop.Desc = lo.ToPtr(schemaProp.Desc.Get("zh"))
+		}
+		props = append(props, prop)
+	}
+
+	return &Unit{
+		Type:       string(unit.Type),
+		ID:         unit.ID,
+		Name:       unit.Name,
+		UIName:     a.translation.Get(unit.UIName()),
+		Properties: props,
+	}, nil
+}
+
+func (a *App) ListAvailableProperties(unitType string) ([]Property, error) {
+	availableProps := a.schema.ListAvailableUnitProperties(ra2.NewUnitType(unitType))
+	props := make([]Property, 0)
+	for _, prop := range availableProps {
 		props = append(props, Property{
+			UKey:    ulid.Make().String(),
+			Key:     prop.Key,
+			Value:   prop.Value,
+			Comment: prop.Comment,
+			Desc:    lo.ToPtr(prop.Desc.Get("zh")),
+		})
+	}
+	return props, nil
+}
+
+func (a *App) NextUnitID(unitType string) (int, error) {
+	r := a.getRules()
+
+	maxID := 0
+	for _, unit := range r.UnitsByType(ra2.NewUnitType(unitType)) {
+		if unit.Type == ra2.NewUnitType(unitType) && unit.ID > maxID {
+			maxID = unit.ID
+		}
+	}
+
+	return maxID + 1, nil
+}
+
+func (a *App) SaveUnit(mod *Unit) error {
+	modProps := make([]ra2.Property, 0)
+	for _, prop := range mod.Properties {
+		modProps = append(modProps, ra2.Property{
 			Key:     prop.Key,
 			Value:   prop.Value,
 			Comment: prop.Comment,
 		})
 	}
 
-	return &Unit{
-		Type:       string(unit.Type),
-		ID:         id,
-		Name:       a.getUnitName(unit),
-		Properties: props,
-	}, nil
+	userUnit := a.rules.GetUnit(ra2.NewUnitType(mod.Type), mod.ID)
+	if userUnit == nil {
+		unit, err := a.rules.AddUnit(ra2.NewUnitType(mod.Type), mod.ID, mod.Name, modProps)
+		if err != nil {
+			return NewAppErrorf(500, "add unit error: %v", err)
+		}
+		userUnit = unit
+	}
+
+	props := userUnit.Properties()
+	for _, modProp := range modProps {
+		prop, ok := lo.Find(props, func(p ra2.Property) bool {
+			return p.Key == modProp.Key
+		})
+		if !ok {
+			if err := userUnit.Set(modProp.Key, modProp.Value, modProp.Comment); err != nil {
+				return NewAppErrorf(500, "set property error: %v", err)
+			}
+		} else {
+			if prop.Value != modProp.Value || prop.Comment != modProp.Comment {
+				if err := userUnit.Set(prop.Key, modProp.Value, modProp.Comment); err != nil {
+					return NewAppErrorf(500, "set property error: %v", err)
+				}
+			}
+		}
+	}
+	for _, prop := range props {
+		if _, ok := lo.Find(modProps, func(p ra2.Property) bool {
+			return p.Key == prop.Key
+		}); !ok {
+			if err := userUnit.Set(prop.Key, ""); err != nil {
+				return NewAppErrorf(500, "set property error: %v", err)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (a *App) DeleteUnit(unitType string, id int) error {
+	r := a.getRules()
+
+	unit := r.GetUnit(ra2.NewUnitType(unitType), id)
+	if unit == nil {
+		return NewAppErrorf(404, "unit not found")
+	}
+
+	userUnit := a.rules.GetUnit(ra2.NewUnitType(unitType), id)
+	if userUnit == nil {
+		return NewAppErrorf(400, "cannot delete unit from origin rules")
+	}
+
+	if err := a.rules.DelUnit(userUnit.Type, userUnit.ID); err != nil {
+		return NewAppErrorf(500, "delete unit error: %v", err)
+	}
+
+	return nil
 }

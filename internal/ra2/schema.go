@@ -2,7 +2,7 @@ package ra2
 
 import (
 	"encoding/json"
-	"os"
+	"io"
 	"slices"
 
 	"github.com/pkg/errors"
@@ -25,15 +25,9 @@ type Schema struct {
 	Building      []Property `json:"building"`
 }
 
-func LoadSchema(filename string) (*Schema, error) {
-	f, err := os.Open(filename)
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-	defer f.Close()
-
+func LoadSchema(r io.Reader) (*Schema, error) {
 	var schema Schema
-	if err := json.NewDecoder(f).Decode(&schema); err != nil {
+	if err := json.NewDecoder(r).Decode(&schema); err != nil {
 		return nil, errors.WithStack(err)
 	}
 	return &schema, nil
