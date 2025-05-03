@@ -134,7 +134,7 @@ function App() {
                   });
               }}
             >
-              打开文件
+              加载配置
             </Button>
             <Button
               onClick={() => {
@@ -147,7 +147,7 @@ function App() {
                   });
               }}
             >
-              保存文件
+              保存配置
             </Button>
             {false && (
               <Button
