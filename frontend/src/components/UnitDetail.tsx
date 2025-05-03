@@ -1,15 +1,16 @@
 import { PlusOutlined } from "@ant-design/icons";
 import { AutoComplete, Button, Input, List, Tooltip, Typography } from "antd";
 import { useEffect, useState } from "react";
-import { ListAvailableProperties } from "../../wailsjs/go/main/App";
+import { ListAvailableProperties, NewULID } from "../../wailsjs/go/main/App";
 import { main } from "../../wailsjs/go/models";
 
 interface UnitDetailProps {
-  unit: main.Unit;
+  value: main.Unit;
+  onChange?: (value: main.Unit) => void;
 }
 
-const UnitDetail: React.FC<UnitDetailProps> = ({ unit }) => {
-  const [currentUnit, setCurrentUnit] = useState(unit);
+const UnitDetail: React.FC<UnitDetailProps> = ({ value, onChange }) => {
+  const [currentUnit, setCurrentUnit] = useState(value);
   const [availableProperties, setAvailableProperties] = useState<
     main.Property[]
   >([]);
@@ -24,34 +25,47 @@ const UnitDetail: React.FC<UnitDetailProps> = ({ unit }) => {
       });
   }, [currentUnit.type]);
 
+  const updateUnitProperties = (newProperties: main.Property[]) => {
+    setCurrentUnit((prev) => {
+      const updatedUnit = main.Unit.createFrom({
+        ...prev,
+        properties: newProperties,
+      });
+      if (onChange) {
+        onChange(updatedUnit);
+      }
+      return updatedUnit;
+    });
+  };
+
   const handlePropertyChange = (
     index: number,
     field: keyof main.Property,
     value: string
   ) => {
-    setCurrentUnit((prev) => {
-      const newProperties = [...prev.properties];
-      newProperties[index] = { ...newProperties[index], [field]: value };
-      return main.Unit.createFrom({ ...prev, properties: newProperties });
-    });
+    const newProperties = [...currentUnit.properties];
+    newProperties[index] = { ...newProperties[index], [field]: value };
+    updateUnitProperties(newProperties);
   };
 
   const handleAddProperty = () => {
-    const newProperties = [
-      ...currentUnit.properties,
-      { key: "", value: "", comment: "" },
-    ];
-    setCurrentUnit((prev) =>
-      main.Unit.createFrom({ ...prev, properties: newProperties })
-    );
+    NewULID()
+      .then((ukey) => {
+        const newProperties = [
+          ...currentUnit.properties,
+          { ukey: ukey, key: "", value: "", comment: "" },
+        ];
+        updateUnitProperties(newProperties);
+      })
+      .catch((error) => {
+        console.error("Failed to generate new ULID:", error);
+      });
   };
 
   const handleDeleteProperty = (index: number) => {
     const newProperties = [...currentUnit.properties];
     newProperties.splice(index, 1);
-    setCurrentUnit((prev) =>
-      main.Unit.createFrom({ ...prev, properties: newProperties })
-    );
+    updateUnitProperties(newProperties);
   };
 
   return (

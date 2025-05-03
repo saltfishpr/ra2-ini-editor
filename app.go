@@ -97,6 +97,10 @@ func (e *AppError) Error() string {
 	return fmt.Sprintf("code=%d, message=%s", e.Code, e.Message)
 }
 
+func (a *App) NewULID() string {
+	return ulid.Make().String()
+}
+
 func (a *App) Open() error {
 	filename, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
 		Title: "选择一个文件",
@@ -282,39 +286,53 @@ func (a *App) SaveUnit(mod *Unit) error {
 		})
 	}
 
+	originUnit := a.origin.GetUnit(ra2.NewUnitType(mod.Type), mod.ID)
+	if originUnit == nil {
+		_, err := a.rules.AddUnit(ra2.NewUnitType(mod.Type), mod.ID, mod.Name, modProps)
+		if err != nil {
+			return NewAppErrorf(500, "add unit error: %v", err)
+		}
+		return nil
+	}
+
 	userUnit := a.rules.GetUnit(ra2.NewUnitType(mod.Type), mod.ID)
 	if userUnit == nil {
-		unit, err := a.rules.AddUnit(ra2.NewUnitType(mod.Type), mod.ID, mod.Name, modProps)
+		// 新建用户级 unit
+		unit, err := a.rules.AddUnit(ra2.NewUnitType(mod.Type), mod.ID, mod.Name, nil)
 		if err != nil {
 			return NewAppErrorf(500, "add unit error: %v", err)
 		}
 		userUnit = unit
 	}
 
-	props := userUnit.Properties()
+	originProps := originUnit.Properties()
+	userProps := userUnit.Properties()
 	for _, modProp := range modProps {
-		prop, ok := lo.Find(props, func(p ra2.Property) bool {
+		prop, ok := lo.Find(originProps, func(p ra2.Property) bool {
 			return p.Key == modProp.Key
 		})
 		if !ok {
-			if err := userUnit.Set(modProp.Key, modProp.Value, modProp.Comment); err != nil {
-				return NewAppErrorf(500, "set property error: %v", err)
-			}
+			userUnit.Set(modProp.Key, modProp.Value, modProp.Comment)
 		} else {
 			if prop.Value != modProp.Value || prop.Comment != modProp.Comment {
-				if err := userUnit.Set(prop.Key, modProp.Value, modProp.Comment); err != nil {
-					return NewAppErrorf(500, "set property error: %v", err)
-				}
+				userUnit.Set(modProp.Key, modProp.Value, modProp.Comment)
 			}
 		}
 	}
-	for _, prop := range props {
-		if _, ok := lo.Find(modProps, func(p ra2.Property) bool {
-			return p.Key == prop.Key
-		}); !ok {
-			if err := userUnit.Set(prop.Key, ""); err != nil {
-				return NewAppErrorf(500, "set property error: %v", err)
-			}
+	for _, userProp := range userProps {
+		_, ok := lo.Find(modProps, func(p ra2.Property) bool {
+			return p.Key == userProp.Key
+		})
+		if !ok {
+			userUnit.Del(userProp.Key)
+		}
+	}
+	for _, originProp := range originProps {
+		_, ok := lo.Find(modProps, func(p ra2.Property) bool {
+			return p.Key == originProp.Key
+		})
+		if !ok {
+			userUnit.Set(originProp.Key, "")
 		}
 	}
 

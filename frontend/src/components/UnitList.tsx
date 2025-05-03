@@ -3,16 +3,16 @@ import { main } from "../../wailsjs/go/models";
 import "./UnitList.css";
 
 interface UnitListProps {
-  units: main.Unit[];
-  onSelectUnit: (unit: main.Unit) => void;
+  items: main.Unit[];
+  onSelect: (unit: main.Unit) => void;
   selectedUnit: main.Unit | null; // 添加选中的单位属性
 }
 
-const UnitList = ({ units, onSelectUnit, selectedUnit }: UnitListProps) => {
+const UnitList = ({ items, onSelect, selectedUnit }: UnitListProps) => {
   const { token } = theme.useToken();
 
   // 按 type 对单位进行分组
-  const groupedUnits = units.reduce(
+  const groupedUnits = items.reduce(
     (acc: Record<string, main.Unit[]>, unit) => {
       const type = unit.type || "其他";
       if (!acc[type]) {
@@ -36,7 +36,7 @@ const UnitList = ({ units, onSelectUnit, selectedUnit }: UnitListProps) => {
             className={`unit-item ${
               selectedUnit && selectedUnit.id === unit.id ? "selected" : ""
             }`}
-            onClick={() => onSelectUnit(unit)}
+            onClick={() => onSelect(unit)}
           >
             {unit.ui_name || unit.name}
           </div>

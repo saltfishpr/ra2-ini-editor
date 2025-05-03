@@ -169,8 +169,8 @@ function App() {
         <Layout className="content-layout">
           <Sider className="app-sider">
             <UnitList
-              units={units}
-              onSelectUnit={(unit) => {
+              items={units}
+              onSelect={(unit) => {
                 GetUnit(unit.type, unit.id)
                   .then((unit) => {
                     setSelectedUnit(unit);
@@ -195,7 +195,10 @@ function App() {
             {selectedUnit ? (
               <UnitDetail
                 key={`${selectedUnit.type}-${selectedUnit.id}`}
-                unit={selectedUnit}
+                value={selectedUnit}
+                onChange={(unit) => {
+                  setSelectedUnit(unit);
+                }}
               />
             ) : (
               <EmptyState />

@@ -10,6 +10,8 @@ export function ListAllUnits():Promise<Array<main.Unit>>;
 
 export function ListAvailableProperties(arg1:string):Promise<Array<main.Property>>;
 
+export function NewULID():Promise<string>;
+
 export function NextUnitID(arg1:string):Promise<number>;
 
 export function Open():Promise<void>;

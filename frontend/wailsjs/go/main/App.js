@@ -18,6 +18,10 @@ export function ListAvailableProperties(arg1) {
   return window['go']['main']['App']['ListAvailableProperties'](arg1);
 }
 
+export function NewULID() {
+  return window['go']['main']['App']['NewULID']();
+}
+
 export function NextUnitID(arg1) {
   return window['go']['main']['App']['NextUnitID'](arg1);
 }

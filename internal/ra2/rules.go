@@ -219,19 +219,19 @@ func (r *Rules) AddUnit(unitType UnitType, unitID int, unitName string, properti
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
-	for _, prop := range properties {
-		_, err := sec.NewKey(prop.Key, prop.Value)
-		if err != nil {
-			return nil, errors.WithStack(err)
-		}
-	}
-	return &Unit{
+	unit := &Unit{
 		BaseSetting: BaseSetting{sec: sec},
 
 		Type: unitType,
 		ID:   unitID,
 		Name: unitName,
-	}, nil
+	}
+	for _, prop := range properties {
+		if err := unit.Set(prop.Key, prop.Value, prop.Comment); err != nil {
+			return nil, errors.WithStack(err)
+		}
+	}
+	return unit, nil
 }
 
 func (r *Rules) DelUnit(unitType UnitType, unitID int) error {
