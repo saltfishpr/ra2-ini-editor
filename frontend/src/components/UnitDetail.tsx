@@ -127,7 +127,11 @@ const UnitDetail: React.FC<UnitDetailProps> = ({ value, onChange }) => {
                 options={availableProperties.map((prop) => ({
                   value: prop.key,
                   label: (
-                    <Tooltip placement="right" title={prop.desc}>
+                    <Tooltip
+                      title={prop.desc}
+                      placement="right"
+                      style={{ width: "300px" }}
+                    >
                       <div>{prop.key}</div>
                     </Tooltip>
                   ),

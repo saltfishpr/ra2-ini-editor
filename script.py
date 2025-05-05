@@ -13,14 +13,7 @@ import sys
 import click
 from google import genai
 from google.cloud import translate_v3
-from pydantic import BaseModel
-from rich.progress import (
-    BarColumn,
-    Progress,
-    SpinnerColumn,
-    TaskProgressColumn,
-    TextColumn,
-)
+from rich.progress import Progress
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s",  # noqa: E501
@@ -134,75 +127,60 @@ def gen_name(desc: str) -> str:
     return response.candidates[0].content.parts[0].text
 
 
-def first_index(text: str, sub: str) -> int:
+def try_translate_text(
+    text: str,
+    source_language_code: str = "en",
+    target_language_code: str = "zh",
+) -> str:
+    if text is None or text == "":
+        return ""
     try:
-        return text.index(sub)
-    except ValueError:
-        return -1
+        return translate_text(text, source_language_code, target_language_code)
+    except Exception:
+        logger.exception(f"translate {text} to {target_language_code}")
+        return ""
 
 
-class Property(BaseModel):
-    key: str
-    name: str
-    desc: dict[str, str]
+def get_translated_keys(output_data: dict) -> list[str]:
+    return [flag["key"] for flag in output_data.get("flags", []) if flag.get("desc")]
 
 
 @cli.command()
-@click.argument("ini_path")
-def gen_schema(ini_path: str) -> None:
-    config = configparser.ConfigParser(interpolation=None)
-    config.optionxform = str
-    config.read(ini_path)
+@click.argument("input_filename")
+@click.option(
+    "--lang", "target_language_code", default="zh", help="目标语言代码 (默认: zh)"
+)
+def translate_schema(input_filename: str, target_language_code: str):
+    if not input_filename.endswith(".json"):
+        raise ValueError("input_filename must end with .json")
 
-    output_path = ini_path[:-4] + ".json"  # .ini 替换为 .json
-    logger.info(f"ini_path: {ini_path}, output_path: {output_path}")
+    output_filename = input_filename.replace(".json", f".{target_language_code}.json")
 
-    schema = {}
-    if os.path.exists(output_path):
-        with open(output_path, "r", encoding="utf-8") as f:
-            schema = json.load(f)
+    translated_keys = []
+    output_data = None
 
-    for section in config.sections():
-        properties = []
-        if section in schema:
-            properties = [Property.model_validate(prop) for prop in schema[section]]
+    if os.path.exists(output_filename):
+        with open(output_filename, "r", encoding="utf-8") as out_file:
+            output_data = json.load(out_file)
+            translated_keys = get_translated_keys(output_data)
 
-        items = list(config.items(section))
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-        ) as progress:
-            task = progress.add_task(
-                f"[cyan]Processing section {section}...", total=len(items)
-            )
-            for key, value in items:
-                if any(prop.key == key for prop in properties):
-                    progress.advance(task)
-                    continue
+    with open(input_filename, "r", encoding="utf-8") as infile:
+        data = json.load(infile)
 
-                idx = first_index(value, ";")
-                if idx == -1:
-                    desc = value
-                else:
-                    desc = value[idx + 1 :]
-                desc = desc.strip()
-                try:
-                    descZh = translate_text(desc)
-                except Exception as e:
-                    logger.error(f"Error translating text: {desc}, Error: {e}")
-                i18nDesc = {
-                    "en": desc,
-                    "zh": descZh or "",
-                }
-                prop = Property(key=key, name=key, desc=i18nDesc)
-                properties.append(prop)
+    flags = data.get("flags", [])
+    with Progress() as progress:
+        task = progress.add_task("Translating...", total=len(flags))
+        for flag in flags:
+            if flag.get("key") in translated_keys:
                 progress.advance(task)
-        schema[section] = [prop.model_dump() for prop in properties]
+                continue
+            flag["desc"] = try_translate_text(
+                flag.get("desc", ""), target_language_code=target_language_code
+            )
+            progress.advance(task)
 
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(schema, f, indent=4)
+    with open(output_filename, "w", encoding="utf-8") as outfile:
+        json.dump(data, outfile, ensure_ascii=False, indent=4)
 
 
 if __name__ == "__main__":

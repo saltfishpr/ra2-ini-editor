@@ -9,20 +9,19 @@ import (
 )
 
 type Schema struct {
-	Country        []Property `json:"country"`
-	CrateRules     []Property `json:"crate_rules"`
-	CombatDamage   []Property `json:"combat_damage"`
-	Radiation      []Property `json:"radiation"`
-	ElevationModel []Property `json:"elevation_model"`
-	WallModel      []Property `json:"wall_model"`
+	Version string    `json:"version"`
+	Flags   []IniFlag `json:"flags"`
+}
 
-	Unit          []Property `json:"unit"`
-	MovingUnit    []Property `json:"moving_unit"`
-	TurretChanger []Property `json:"turret_changer"`
-	Infantry      []Property `json:"infantry"`
-	Vehicle       []Property `json:"vehicle"`
-	Aircraft      []Property `json:"aircraft"`
-	Building      []Property `json:"building"`
+type IniFlag struct {
+	Category     string `json:"category"`
+	Filename     string `json:"filename"`
+	Section      string `json:"section"`
+	Key          string `json:"key"`
+	ValueType    string `json:"value_type"`
+	DefaultValue string `json:"default_value"`
+	AddsToList   string `json:"adds_to_list"`
+	Desc         string `json:"desc"`
 }
 
 func LoadSchema(r io.Reader) (*Schema, error) {
@@ -33,37 +32,32 @@ func LoadSchema(r io.Reader) (*Schema, error) {
 	return &schema, nil
 }
 
-func (s *Schema) ListAvailableProperties(key string) []Property {
-	switch key {
-	case "country":
-		return s.Country
-	case "crate_rules":
-		return s.CrateRules
-	case "combat_damage":
-		return s.CombatDamage
-	case "radiation":
-		return s.Radiation
-	case "elevation_model":
-		return s.ElevationModel
-	case "wall_model":
-		return s.WallModel
-	case "infantry", "vehicle", "aircraft", "building":
-		return s.ListAvailableUnitProperties(UnitType(key))
-	default:
-		return nil
+func (s *Schema) getFlags(category string) []Property {
+	var res []Property
+	for _, flag := range s.Flags {
+		if flag.Category == category {
+			res = append(res, Property{
+				Key: flag.Key,
+				// Name:    flag.Key,
+				Desc: I18NString{
+					"zh": flag.Desc, // TODO
+				},
+			})
+		}
 	}
+	return res
 }
 
 func (s *Schema) ListAvailableUnitProperties(unitType UnitType) []Property {
 	switch unitType {
 	case UnitTypeInfantry:
-		return slices.Concat(s.Unit, s.MovingUnit, s.Infantry)
+		return slices.Concat(s.getFlags("AbstractTypes"), s.getFlags("ObjectTypes"), s.getFlags("TechnoTypes"), s.getFlags("InfantryTypes"))
 	case UnitTypeVehicle:
-		return slices.Concat(s.Unit, s.MovingUnit, s.Vehicle)
+		return slices.Concat(s.getFlags("AbstractTypes"), s.getFlags("ObjectTypes"), s.getFlags("TechnoTypes"), s.getFlags("VehicleTypes"))
 	case UnitTypeAircraft:
-		return slices.Concat(s.Unit, s.MovingUnit, s.Aircraft)
+		return slices.Concat(s.getFlags("AbstractTypes"), s.getFlags("ObjectTypes"), s.getFlags("TechnoTypes"), s.getFlags("AircraftTypes"))
 	case UnitTypeBuilding:
-		return slices.Concat(s.Unit, s.Building)
+		return slices.Concat(s.getFlags("AbstractTypes"), s.getFlags("ObjectTypes"), s.getFlags("TechnoTypes"), s.getFlags("BuildingTypes"))
 	default:
 		return nil
 	}

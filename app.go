@@ -30,7 +30,7 @@ type App struct {
 
 // NewApp creates a new App application struct
 func NewApp() *App {
-	schemaFile, err := dataFs.Open("data/schema.json")
+	schemaFile, err := dataFs.Open("data/schema/schema.zh.json")
 	if err != nil {
 		panic(err)
 	}
